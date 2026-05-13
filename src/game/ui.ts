@@ -176,7 +176,7 @@ export function drawUI({
     ctx.fillText(`Bullets: ${state.bulletCount}`, hudX, hudY + 120);
     ctx.fillText(`Enemies Per Round: ${state.wave+state.enemyModifier}`, hudX, hudY + 150);
     ctx.fillText(`Movement Speed: ${state.playerSpeedMultiplier}`, hudX, hudY + 180);//nie faktyczna szybkosc ale lepiej wyglada to dla gracza
-    ctx.fillText(`Bullet Speed: ${state.playerBulletSpeedMultiplier}`, hudX, hudY + 180);
+    ctx.fillText(`Bullet Speed: ${state.playerBulletSpeedMultiplier}`, hudX, hudY + 210);
     const size = 10; //celownik
     const centerX = screen.width / 2;
     const centerY = screen.height / 2;
