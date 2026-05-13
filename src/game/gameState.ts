@@ -33,6 +33,7 @@ export type GameState = {
         moneyMultiplier: number;
         enemyModifier: number;
         playerSpeedMultiplier: number;
+        playerBulletSpeedMultiplier:number;
         playerShootDelay: number;
         bulletCount: number;
         FOV: number;
@@ -73,6 +74,7 @@ export const gameState: GameState = {
         moneyMultiplier: 1,
         enemyModifier: 0,
         playerSpeedMultiplier: 1,
+        playerBulletSpeedMultiplier: 1,
         playerShootDelay: CONFIG.PLAYER_SHOOT_DELAY,
         bulletCount: 1,
         FOV: CONFIG.FOV,
