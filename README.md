@@ -6,20 +6,13 @@ Ma prostą grafikę w stylu 3D, a także minimapę ułatwiającą orientację w 
 
 Sterowanie
 
-Klawisz	Funkcja
-W	Ruch do przodu
-
-S	Ruch do tyłu
-
-A	Ruch w lewo
-
-D	Ruch w prawo
-
-Strzałka w lewo Obrót gracza w lewo
-
-Strzałka w prawo    Obrót gracza w prawo
-
-Spacja  Strzał
+W -	Ruch do przodu
+S	- Ruch do tyłu
+A	- Ruch w lewo
+D	- Ruch w prawo
+Strzałka w lewo - Obrót gracza w lewo
+Strzałka w prawo - Obrót gracza w prawo
+Spacja - Strzał
 
 Funkcje
 
