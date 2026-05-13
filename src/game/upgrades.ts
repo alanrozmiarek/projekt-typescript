@@ -14,7 +14,7 @@ export const ALL_UPGRADES: Upgrade[] = [
         id: "life_1",
         name: "Extra Heart",
         description: "+1 life",
-        rarity: "common",
+        rarity: "rare",
         apply: () => {
             gameState.stats.lives.push(true);
         },
@@ -23,7 +23,7 @@ export const ALL_UPGRADES: Upgrade[] = [
         id: "heal_1",
         name: "Bandages",
         description: "Heal 1 life",
-        rarity: "rare",
+        rarity: "common",
         apply: () => {
             for (let i = gameState.stats.lives.length - 1; i >= 0; i--) {//heal 1 lfe
                 if (!gameState.stats.lives[i]) {
@@ -49,6 +49,15 @@ export const ALL_UPGRADES: Upgrade[] = [
         rarity: "rare",
         apply: () => {
             gameState.stats.moneyMultiplier *= 2;
+        },
+    },
+    {
+        id: "bullet_speed",
+        name: "Silver Bullets",
+        description: "+25% bullet speed",
+        rarity: "rare",
+        apply: () => {
+            gameState.stats.playerBulletSpeedMultiplier *= 1.25;
         },
     },
     {
@@ -103,15 +112,6 @@ export const ALL_UPGRADES: Upgrade[] = [
         rarity: "curse",
         apply: () => {
             gameState.stats.playerShootDelay *= 1.35;
-        },
-    },
-    {
-        id: "life_3",
-        name: "Tank Core",
-        description: "+3 lives",
-        rarity: "epic",
-        apply: () => {
-            gameState.stats.lives.push(true, true, true);
         },
     },
     {

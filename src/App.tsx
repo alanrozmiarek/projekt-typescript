@@ -18,7 +18,6 @@ export type Bullet = {
   distance: number;
 };
 const bullets: Bullet[] = [];
-const BULLET_SPEED = CONFIG.BULLET_SPEED;
 
 export type Enemy = {
   x: number;
@@ -60,9 +59,10 @@ let playerShootCooldown = 0;
 //wymiary ekranu
 const SCREEN_WIDTH = window.innerWidth;
 const SCREEN_HEIGHT = window.innerHeight;
-//predkosc gracza i kamery
+//predkosc gracza i kamery i pocisków
 const BASE_MOVE_SPEED = CONFIG.BASE_MOVE_SPEED;
 const ROT_SPEED = CONFIG.ROT_SPEED;
+const BASE_BULLET_SPEED = CONFIG.BASE_BULLET_SPEED;
 
 
 const keys: Record<string, boolean> = {};
@@ -283,7 +283,7 @@ export default function App() {
             x: PLAYER.x,
             y: PLAYER.y,
             angle: PLAYER.angle + angleOffset,
-            speed: BULLET_SPEED,
+            speed: BASE_BULLET_SPEED*gameState.stats.playerBulletSpeedMultiplier,
             distance: 0,
           });
         }
@@ -308,7 +308,7 @@ export default function App() {
             x: enemy.x,
             y: enemy.y,
             angle,
-            speed: BULLET_SPEED * 0.4,
+            speed: BASE_BULLET_SPEED * 0.4,
             distance: 0,
           });
           enemy.cooldown = Math.random() * 100 + 50;
@@ -418,7 +418,7 @@ export default function App() {
       ctx.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
       render3D({ctx, player: PLAYER, enemies, bullets, enemyBullets, particles, castRay, screen:{width:SCREEN_WIDTH,height:SCREEN_HEIGHT}});
       drawMinimap({ctx, player: PLAYER, map: MAP, enemies, bullets, enemyBullets});
-      drawUI({ctx, state: {money: gameState.stats.money, lives:gameState.stats.lives, moneyMultiplier:gameState.stats.moneyMultiplier, playerShootDelay: gameState.stats.playerShootDelay, bulletCount: gameState.stats.bulletCount, enemyModifier:gameState.stats.enemyModifier, wave: gameState.world.wave, playerSpeedMultiplier: gameState.stats.playerSpeedMultiplier}, screen: {width: SCREEN_WIDTH, height: SCREEN_HEIGHT}})
+      drawUI({ctx, state: {money: gameState.stats.money, lives:gameState.stats.lives, moneyMultiplier:gameState.stats.moneyMultiplier, playerShootDelay: gameState.stats.playerShootDelay, bulletCount: gameState.stats.bulletCount, enemyModifier:gameState.stats.enemyModifier, wave: gameState.world.wave, playerSpeedMultiplier: gameState.stats.playerSpeedMultiplier, playerBulletSpeedMultiplier: gameState.stats.playerBulletSpeedMultiplier}, screen: {width: SCREEN_WIDTH, height: SCREEN_HEIGHT}})
       drawUpgradeMenu({ctx, ui: {upgradeMenuOpen: upgradeMenuOpen, currentUpgrades: currentUpgrades, selectedUpgrade: selectedUpgrade}, screen: {width: SCREEN_WIDTH, height: SCREEN_HEIGHT}});
       drawPauseMenu({ctx, ui: {pauseMenuOpen:pauseMenuOpen}, screen: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT }});
       requestAnimationFrame(gameLoop);
