@@ -1,8 +1,16 @@
 import { useEffect, useRef } from "react";
 import "./App.css";
+import { CONFIG } from "./config";
+import type {Upgrade} from "./game/upgrades.ts";
+import {getRandomUpgrades} from "./game/upgrades.ts";
+import {gameState} from "./game/gameState.ts";
+import {createMap} from "./game/map.ts";
+import {render3D} from "./game/render.tsx";
+import {drawMinimap, drawPauseMenu, drawUpgradeMenu, drawUI} from "./game/ui.ts";
+import type {Player} from "./game/gameState.ts";
+//highscore:
 
-type MapGrid = number[][];
-type Bullet = {
+export type Bullet = {
   x: number;
   y: number;
   angle: number;
@@ -10,9 +18,9 @@ type Bullet = {
   distance: number;
 };
 const bullets: Bullet[] = [];
-const BULLET_SPEED = 0.2;
+const BULLET_SPEED = CONFIG.BULLET_SPEED;
 
-type Enemy = {
+export type Enemy = {
   x: number;
   y: number;
   cooldown: number;
@@ -23,7 +31,7 @@ type Enemy = {
 };
 const enemies: Enemy[] = [];
 
-type EnemyBullet = {
+export type EnemyBullet = {
   x: number;
   y: number;
   angle: number;
@@ -32,7 +40,7 @@ type EnemyBullet = {
 };
 const enemyBullets: EnemyBullet[] = [];
 
-type Particle = {
+export type Particle = {
   x: number;
   y: number;
   vx: number;
@@ -41,127 +49,23 @@ type Particle = {
   radius: number;
   lifetime: number;
 };
-const particles: Particle[] = [];
+let pauseMenuOpen = false;
+let upgradeMenuOpen = false;
+let currentUpgrades: Upgrade[] = [];
+let selectedUpgrade = 0;
 
-let scoreboard = 0;
-const lives = [true, true, true];
-let damageFlash = 0;
+const particles: Particle[] = [];
 let playerShootCooldown = 0;
-const PLAYER_SHOOT_DELAY = 15;
+
 //wymiary ekranu
 const SCREEN_WIDTH = window.innerWidth;
 const SCREEN_HEIGHT = window.innerHeight;
 //predkosc gracza i kamery
-const MOVE_SPEED = 0.034;
-const ROT_SPEED = 0.04;
-//pole widzenia
-const FOV = Math.PI / 2;
-const MINIMAP_SIZE = 400;
+const BASE_MOVE_SPEED = CONFIG.BASE_MOVE_SPEED;
+const ROT_SPEED = CONFIG.ROT_SPEED;
+
 
 const keys: Record<string, boolean> = {};
-
-function createMap() {//generator lososwej mapy
-  while (true) {
-    const width = Math.floor(Math.random() * 10) + 15;
-    const height = Math.floor(Math.random() * 10) + 15;
-    const map: MapGrid = [];
-
-    for (let y = 0; y < height; y++) {
-      const row: number[] = [];
-      for (let x = 0; x < width; x++) {
-        //sciany
-        if (x === 0 || y === 0 || x === width-1 || y === height-1) {
-          row.push(1);
-        } else {
-          if (Math.random() < 0.25) {
-            row.push(1);
-          } else {
-            row.push(0);
-          }
-        }
-      }
-
-      map.push(row);
-    }
-    //usuwanie zamknietych pokoi
-    let startX = 1;
-    let startY = 1;
-    let found = false;
-    for (let y = 1; y < height-1; y++) {
-      for (let x = 1; x < width-1; x++) {
-        if (map[y][x] === 0) {
-          startX = x;
-          startY = y;
-          found = true;
-          break;
-        }
-      }
-      if (found) {
-        break;
-      }
-    }
-    const visited: boolean[][] = [];
-    for (let y = 0; y < height; y++) {
-      visited[y] = [];
-      for (let x = 0; x < width; x++) {
-        visited[y][x] = false;
-      }
-    }
-    const queue: [number, number][] = [];
-    queue.push([startX, startY]);
-    visited[startY][startX] = true;
-
-    while (queue.length > 0) {
-      const current = queue.shift();
-
-      if (!current) continue;
-      const [x, y] = current;
-      const directions = [
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1],
-      ];
-
-      for (const dir of directions) {
-        const nx = x + dir[0];
-        const ny = y + dir[1];
-        if (
-            nx >= 0 &&
-            ny >= 0 &&
-            nx < width &&
-            ny < height &&
-            map[ny][nx] === 0 &&
-            !visited[ny][nx]
-        ) {
-          visited[ny][nx] = true;
-          queue.push([nx, ny]);
-        }
-      }
-    }
-
-    for (let y = 1; y < height-1; y++) {
-      for (let x = 1; x < width -1; x++) {
-        if (map[y][x] === 0 && !visited[y][x]) {
-          map[y][x] = 1;
-        }
-      }
-    }
-    let freeSpaces = 0;
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (map[y][x] === 0) {
-          freeSpaces++;
-        }
-      }
-    }
-    // jezeli mapa ma minimum 15 wolnych miejsc
-    if (freeSpaces >= 15) {
-      return map;
-    }
-  }
-}
-
 const MAP = createMap();
 
 function getSpawn() {
@@ -178,12 +82,12 @@ function getSpawn() {
 }
 const spawn = getSpawn();
 
-const PLAYER = {
+const PLAYER: Player = {
   x: spawn.x,
   y: spawn.y,
   angle: Math.random() * Math.PI * 2,
 };
-function spawnEnemy(minDistance = 5): Enemy {//przeciwnicy
+function spawnEnemy(minDistance = CONFIG.ENEMY_MIN_DISTANCE): Enemy {//przeciwnicy
   while (true) {
     const x = Math.floor(Math.random() * (MAP[0].length - 2)) + 1 + 0.5;
     const y = Math.floor(Math.random() * (MAP.length - 2)) + 1 + 0.5;
@@ -199,7 +103,7 @@ function spawnEnemy(minDistance = 5): Enemy {//przeciwnicy
         x,
         y,
         cooldown: Math.random() * 100 + 50,
-        size: 0.4,
+        size: CONFIG.ENEMY_SIZE,
         alive: true,
         moveDir: 0,
         moveTimer: 10,
@@ -207,7 +111,7 @@ function spawnEnemy(minDistance = 5): Enemy {//przeciwnicy
     }
   }
 }
-for (let i = 0; i < 5; i++) {
+for (let i = 0; i < CONFIG.STARTING_ENEMIES; i++) {
   enemies.push(spawnEnemy());
 }
 
@@ -225,13 +129,13 @@ function isWall(x: number, y: number) {
   return MAP[mapY][mapX] === 1;
 }
 function loseLife() {
-  for (let i = 0; i < lives.length; i++){
-    if (lives[i]) {
-      lives[i] = false;
+  for (let i = 0; i < gameState.stats.lives.length; i++){
+    if (gameState.stats.lives[i]) {
+      gameState.stats.lives[i] = false;
       return;
     }
   }
-  alert(`Game Over! Score: ${scoreboard}`);
+  alert(`Game Over! Wave: ${gameState.world.wave}`);
   window.location.reload();
 }
 function spawnWallHitParticle(x: number, y: number, color: string, radius: number, lifetime: number) {
@@ -291,7 +195,37 @@ export default function App() {
     const ctx = canvas.getContext("2d")!;
 
     const keyDown = (e: KeyboardEvent) => {
-      keys[e.key.toLowerCase()] = true;
+      const key = e.key.toLowerCase();
+      keys[key] = true;
+      if (upgradeMenuOpen){
+        if (key === "arrowleft") {
+          selectedUpgrade--;
+          if (selectedUpgrade < 0) {
+            selectedUpgrade = currentUpgrades.length - 1;
+          }
+        }
+        if (key === "arrowright") {
+          selectedUpgrade++;
+          if (selectedUpgrade >= currentUpgrades.length) {
+            selectedUpgrade = 0;
+          }
+        }
+        if (key === "enter") {
+          const upgrade = currentUpgrades[selectedUpgrade];
+          if (!upgrade) return;
+          upgrade.apply(gameState);
+          upgradeMenuOpen = false;
+          const enemyCount = Math.max(1, gameState.world.wave + gameState.stats.enemyModifier);
+          for (let i = 0; i < enemyCount; i++) {
+            enemies.push(spawnEnemy(7));
+          }
+        }
+      }
+      if (key === "escape") {
+        pauseMenuOpen = !pauseMenuOpen;
+        return;
+      }
+
     };
     const keyUp = (e: KeyboardEvent) => {
       keys[e.key.toLowerCase()] = false;
@@ -300,8 +234,11 @@ export default function App() {
     window.addEventListener("keydown", keyDown);
     window.addEventListener("keyup", keyUp);
 
+
     function update() {
-      if (keys["arrowleft"]) {
+      if (pauseMenuOpen) return;
+      if (upgradeMenuOpen) return;
+      if (keys["arrowleft"]) {//movement
         PLAYER.angle -= ROT_SPEED;
       }
       if (keys["arrowright"]) {
@@ -326,22 +263,31 @@ export default function App() {
         moveX += Math.cos(PLAYER.angle + Math.PI / 2);
         moveY += Math.sin(PLAYER.angle + Math.PI / 2);
       }
+      if (CONFIG.DEBUG && keys["."]) {
+        gameState.stats.lives.push(true);
+      }
       const length = Math.hypot(moveX, moveY);
       if (length > 0) {
-        moveX = (moveX / length) * MOVE_SPEED;
-        moveY = (moveY / length) * MOVE_SPEED;
+        moveX = (moveX / length) * BASE_MOVE_SPEED * gameState.stats.playerSpeedMultiplier;
+        moveY = (moveY / length) * BASE_MOVE_SPEED * gameState.stats.playerSpeedMultiplier;
       }
 
       if (playerShootCooldown > 0) playerShootCooldown--;
       if (keys[" "] && playerShootCooldown <= 0){
-        bullets.push({
-          x: PLAYER.x,
-          y: PLAYER.y,
-          angle: PLAYER.angle,
-          speed: BULLET_SPEED,
-          distance: 0,
-        });
-        playerShootCooldown = PLAYER_SHOOT_DELAY;
+        const spread = 0.15;
+        for (let i = 0; i < gameState.stats.bulletCount; i++) {
+          let angleOffset = 0;
+          if (gameState.stats.bulletCount > 1) {
+            angleOffset = (i - (gameState.stats.bulletCount - 1) / 2) * spread;}
+          bullets.push({
+            x: PLAYER.x,
+            y: PLAYER.y,
+            angle: PLAYER.angle + angleOffset,
+            speed: BULLET_SPEED,
+            distance: 0,
+          });
+        }
+        playerShootCooldown = gameState.stats.playerShootDelay;
       }
       const nextX = PLAYER.x + moveX;
       const nextY = PLAYER.y + moveY;
@@ -372,7 +318,7 @@ export default function App() {
           enemy.moveDir = Math.random() * Math.PI * 2;
           enemy.moveTimer = Math.floor(Math.random() * 60 + 30); // move 0.5-1s at 60fps
         }
-        const moveDist = MOVE_SPEED * 0.5;
+        const moveDist = BASE_MOVE_SPEED * 0.5;
         const nextX = enemy.x + Math.cos(enemy.moveDir) * moveDist;
         const nextY = enemy.y + Math.sin(enemy.moveDir) * moveDist;
         if (!isWall(nextX, enemy.y)) enemy.x = nextX;
@@ -409,7 +355,7 @@ export default function App() {
           const dy = b.y - enemy.y;
           if (Math.hypot(dx, dy) < enemy.size) {
             enemy.alive = false;
-            scoreboard += 100;
+            gameState.stats.money += CONFIG.MONEY_PER_KILL * gameState.stats.moneyMultiplier;
             spawnParticles(enemy.x, enemy.y, "red", 15, 0.05, 0.1, 30);
             bullets.splice(i, 1);
             break;
@@ -444,22 +390,17 @@ export default function App() {
         const dy = b.y - PLAYER.y;
         if (Math.hypot(dx, dy) < 0.3) { // hit player
           enemyBullets.splice(i, 1);
-          damageFlash = 10;
+          gameState.effects.damageFlash = 10;
           loseLife();
         }
       }
       const aliveEnemies = enemies.filter(e => e.alive);
-      if (aliveEnemies.length === 0) {
+      if (aliveEnemies.length === 0) {//konie rundy
         enemies.length = 0;
-        for (let i = lives.length - 1; i >= 0; i--) {
-          if (!lives[i]) {
-            lives[i] = true;
-            break;
-          }
-        }
-        for (let i = 0; i < 5; i++) {
-          enemies.push(spawnEnemy(7));
-        }
+        gameState.world.wave+=1;
+        upgradeMenuOpen = true;//choose a new upgrade
+        currentUpgrades = getRandomUpgrades(3);
+        selectedUpgrade = 0;
       }
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
@@ -471,185 +412,15 @@ export default function App() {
         }
       }
     }
-    function angleDiff(a: number, b: number) {
-      let diff = a - b;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
-      return diff;
-    }
-    function render3D() {
-      //niebo
-      ctx.fillStyle = "#373737";
-      ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT/2);
-      //podloga
-      ctx.fillStyle = "#222222";
-      ctx.fillRect(0, SCREEN_HEIGHT/2, SCREEN_WIDTH, SCREEN_HEIGHT/2);
-      for (let x = 0; x < SCREEN_WIDTH; x++) {
-        const angle = PLAYER.angle - FOV/2 + (x/SCREEN_WIDTH) * FOV;
-        let distance = castRay(angle);
-        distance *= Math.cos(PLAYER.angle-angle);
-        const wallHeight = (SCREEN_HEIGHT * 0.8)/distance;
-        const shade = 255-distance * 25;
-        ctx.fillStyle = `rgb(${shade}, ${shade}, ${shade})`;
-        ctx.fillRect(x, SCREEN_HEIGHT/2-wallHeight/2, 1, wallHeight);
-      }
-      for (const b of bullets) {
-        const dx = b.x - PLAYER.x;
-        const dy = b.y - PLAYER.y;
-        const angleToBullet = Math.atan2(dy, dx);
-        const distanceToBullet = Math.hypot(dx, dy);
-        const diff = angleDiff(angleToBullet, PLAYER.angle);
-        if (Math.abs(diff) < FOV / 2) {
-          const wallDistance = castRay(angleToBullet);
-          if (distanceToBullet < wallDistance) {
-            const projHeight = (SCREEN_HEIGHT / 16) / distanceToBullet;
-            ctx.fillStyle = "#31c5ff";
-            const screenX = (diff + FOV / 2) / FOV * SCREEN_WIDTH;
-            ctx.fillRect(screenX, SCREEN_HEIGHT / 2 - projHeight / 2, 4, projHeight);
-          }
-        }
-      }
 
-      for (const enemy of enemies) {//rysowaine przeciwników
-        if (!enemy.alive) continue;
-        const dx = enemy.x - PLAYER.x;
-        const dy = enemy.y - PLAYER.y;
-        const angleToEnemy = Math.atan2(dy, dx);
-        const distanceToEnemy = Math.hypot(dx, dy);
-        const diff = angleDiff(angleToEnemy, PLAYER.angle);
-        if (Math.abs(diff) < FOV / 2) {
-          const wallDistance = castRay(angleToEnemy);
-          if (distanceToEnemy < wallDistance) {
-            const screenX = (diff + FOV / 2) / FOV * SCREEN_WIDTH;
-            ctx.fillStyle = "red";
-            ctx.fillRect(screenX, SCREEN_HEIGHT/2, 64/distanceToEnemy, (SCREEN_HEIGHT/2)/distanceToEnemy);
-          }
-        }
-      }
-      for (let i = enemyBullets.length - 1; i >= 0; i--) {
-        const b = enemyBullets[i];
-        b.x += Math.cos(b.angle) * b.speed;
-        b.y += Math.sin(b.angle) * b.speed;
-        b.distance += b.speed;
-        if (isWall(b.x, b.y)) {
-          enemyBullets.splice(i, 1);
-          continue;
-        }
-        const dx = b.x - PLAYER.x;
-        const dy = b.y - PLAYER.y;
-        const angleToBullet = Math.atan2(dy, dx);
-        const distanceToBullet = Math.hypot(dx, dy);
-        const diff = angleDiff(angleToBullet, PLAYER.angle);
-        if (Math.abs(diff) < FOV / 2) {
-          const wallDistance = castRay(angleToBullet);
-          if (distanceToBullet < wallDistance) {
-            const projHeight = (SCREEN_HEIGHT / 16) / distanceToBullet;
-            const screenX = (diff + FOV / 2) / FOV * SCREEN_WIDTH;
-            ctx.fillStyle = "yellow";
-            ctx.fillRect(screenX, SCREEN_HEIGHT / 2 - projHeight/2, 4, projHeight);
-          }
-        }
-      }
-      //hud
-      ctx.fillStyle = "white";
-      ctx.font = "20px Arial";
-      ctx.textAlign = "right";
-      ctx.fillText(`Score: ${scoreboard}`, SCREEN_WIDTH - 20, 30);
-      for (let i = 0; i < lives.length; i++) {
-        ctx.fillStyle = lives[i] ? "red" : "#555";
-        ctx.fillRect(SCREEN_WIDTH - 40 - i * 25, 40, 20, 20);
-      }
-      for (const p of particles) {//efekty
-        const dx = p.x - PLAYER.x;
-        const dy = p.y - PLAYER.y;
-        const angleToParticle = Math.atan2(dy, dx);
-        const distanceToParticle = Math.hypot(dx, dy);
-        const diff = angleDiff(angleToParticle, PLAYER.angle);
-        if (Math.abs(diff) < FOV / 2) {
-          const wallDistance = castRay(angleToParticle);
-          if (distanceToParticle < wallDistance) {
-            const screenX = (diff + FOV / 2) / FOV * SCREEN_WIDTH;
-            const projSize = (p.radius * SCREEN_HEIGHT) / distanceToParticle; // scale by distance
-            ctx.fillStyle = p.color;
-            ctx.globalAlpha = Math.max(p.lifetime / 30, 0); // fade out
-            ctx.beginPath();
-            ctx.arc(screenX, SCREEN_HEIGHT / 2, projSize*3, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalAlpha = 1;
-          }
-        }
-      }
-      if (damageFlash > 0) { //efekt obrazen
-        ctx.fillStyle = "rgba(255, 0, 0, 0.4)";
-        ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-        damageFlash--;
-      }
-      const size = 10; //celownik
-      const centerX = SCREEN_WIDTH / 2;
-      const centerY = SCREEN_HEIGHT / 2;
-      ctx.strokeStyle = "white";
-      ctx.lineWidth = 2;
-      ctx.beginPath();//linia -
-      ctx.moveTo(centerX - size, centerY);
-      ctx.lineTo(centerX + size, centerY);
-      ctx.stroke();
-      ctx.beginPath();//linia |
-      ctx.moveTo(centerX, centerY - size);
-      ctx.lineTo(centerX, centerY + size);
-      ctx.stroke();
-    }
-    //minimapa
-
-    function drawMinimap() {
-      const scaleX = MINIMAP_SIZE / MAP[0].length;
-      const scaleY = MINIMAP_SIZE / MAP.length;
-      const tileSize = Math.min(scaleX, scaleY);
-      for (let y = 0; y < MAP.length; y++) {
-        for (let x = 0; x < MAP[y].length; x++) {
-          ctx.fillStyle = MAP[y][x] === 1 ? "white" : "#111";
-          ctx.fillRect(x * tileSize,y * tileSize, tileSize, tileSize);
-        }
-      }
-      // Player
-      ctx.fillStyle = "#22ff00";
-      ctx.beginPath();
-      ctx.arc(PLAYER.x * tileSize, PLAYER.y * tileSize, tileSize / 4, 0, Math.PI * 2);
-      ctx.fill();
-      // Player direction line
-      ctx.strokeStyle = "#22ff00";
-      ctx.beginPath();
-      ctx.moveTo(PLAYER.x * tileSize, PLAYER.y * tileSize);
-      ctx.lineTo(
-          (PLAYER.x + Math.cos(PLAYER.angle)) * tileSize,
-          (PLAYER.y + Math.sin(PLAYER.angle)) * tileSize
-      );
-      ctx.stroke();
-      // Bullets
-      ctx.fillStyle = "#31c5ff";
-      for (const b of bullets) {
-        ctx.beginPath();
-        ctx.arc(b.x * tileSize, b.y * tileSize, 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      // Enemies
-      for (const enemy of enemies) {
-        if (!enemy.alive) continue;
-        ctx.fillStyle = "red";
-        ctx.fillRect((enemy.x - 0.25) * tileSize, (enemy.y - 0.25) * tileSize, tileSize * 0.5, tileSize * 0.5);
-      }
-      // Enemy bullets
-      ctx.fillStyle = "yellow";
-      for (const e of enemyBullets) {
-        ctx.beginPath();
-        ctx.arc(e.x * tileSize, e.y * tileSize, 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
     function gameLoop() {
       update();
       ctx.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-      render3D();
-      drawMinimap();
+      render3D({ctx, player: PLAYER, enemies, bullets, enemyBullets, particles, castRay, screen:{width:SCREEN_WIDTH,height:SCREEN_HEIGHT}});
+      drawMinimap({ctx, player: PLAYER, map: MAP, enemies, bullets, enemyBullets});
+      drawUI({ctx, state: {money: gameState.stats.money, lives:gameState.stats.lives, moneyMultiplier:gameState.stats.moneyMultiplier, playerShootDelay: gameState.stats.playerShootDelay, bulletCount: gameState.stats.bulletCount, enemyModifier:gameState.stats.enemyModifier, wave: gameState.world.wave, playerSpeedMultiplier: gameState.stats.playerSpeedMultiplier}, screen: {width: SCREEN_WIDTH, height: SCREEN_HEIGHT}})
+      drawUpgradeMenu({ctx, ui: {upgradeMenuOpen: upgradeMenuOpen, currentUpgrades: currentUpgrades, selectedUpgrade: selectedUpgrade}, screen: {width: SCREEN_WIDTH, height: SCREEN_HEIGHT}});
+      drawPauseMenu({ctx, ui: {pauseMenuOpen:pauseMenuOpen}, screen: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT }});
       requestAnimationFrame(gameLoop);
     }
     gameLoop();
