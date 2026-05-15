@@ -1,14 +1,15 @@
 import { useEffect, useRef } from "react";
 import "./App.css";
 import { CONFIG } from "./config";
-import type {Upgrade} from "./game/upgrades.ts";
+import {getRandomCurse, type Upgrade} from "./game/upgrades.ts";
 import {getRandomUpgrades} from "./game/upgrades.ts";
 import {gameState} from "./game/gameState.ts";
 import {createMap} from "./game/map.ts";
 import {render3D} from "./game/render.tsx";
 import {drawMinimap, drawPauseMenu, drawUpgradeMenu, drawUI} from "./game/ui.ts";
 import type {Player} from "./game/gameState.ts";
-//highscore:
+
+//highscore: 26
 
 export type Bullet = {
   x: number;
@@ -64,6 +65,7 @@ const BASE_MOVE_SPEED = CONFIG.BASE_MOVE_SPEED;
 const ROT_SPEED = CONFIG.ROT_SPEED;
 const BASE_BULLET_SPEED = CONFIG.BASE_BULLET_SPEED;
 
+const spread = CONFIG.BASE_BULLET_SPREAD;
 
 const keys: Record<string, boolean> = {};
 const MAP = createMap();
@@ -193,7 +195,17 @@ export default function App() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
+    canvas.onclick = () => {
+      canvas.requestPointerLock();
+    };
+    let yaw = 0;
+    const mouseMove = (e: MouseEvent) => {
+      if (document.pointerLockElement === canvas) {
+        yaw += e.movementX;
+      }
+    };
 
+    window.addEventListener("mousemove", mouseMove);
     const keyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       keys[key] = true;
@@ -216,7 +228,7 @@ export default function App() {
           upgrade.apply(gameState);
           upgradeMenuOpen = false;
           const enemyCount = Math.max(1, gameState.world.wave + gameState.stats.enemyModifier);
-          for (let i = 0; i < enemyCount; i++) {
+          for (let i = 0; i < enemyCount; i++) {//spawn przeciwników po rundzie
             enemies.push(spawnEnemy(7));
           }
         }
@@ -230,7 +242,10 @@ export default function App() {
     const keyUp = (e: KeyboardEvent) => {
       keys[e.key.toLowerCase()] = false;
     };
+    let mouseDown = false;
 
+    window.addEventListener("mousedown", () => (mouseDown = true));
+    window.addEventListener("mouseup", () => (mouseDown = false));
     window.addEventListener("keydown", keyDown);
     window.addEventListener("keyup", keyUp);
 
@@ -238,12 +253,16 @@ export default function App() {
     function update() {
       if (pauseMenuOpen) return;
       if (upgradeMenuOpen) return;
+
       if (keys["arrowleft"]) {//movement
         PLAYER.angle -= ROT_SPEED;
       }
       if (keys["arrowright"]) {
         PLAYER.angle += ROT_SPEED;
       }
+
+      PLAYER.angle += yaw * 0.01;
+      yaw *= 0.6;
       let moveX = 0;
       let moveY = 0;
 
@@ -266,6 +285,42 @@ export default function App() {
       if (CONFIG.DEBUG && keys["."]) {
         gameState.stats.lives.push(true);
       }
+      if (CONFIG.DEBUG && keys[","]) {
+        gameState.stats.lives.pop();
+      }
+      if (CONFIG.DEBUG && keys[";"]) {
+        enemies.push(spawnEnemy());
+      }
+      if (CONFIG.DEBUG && keys["i"]) {
+        gameState.stats.playerShootDelayMultiplier*=1.1;
+      }
+      if (CONFIG.DEBUG && keys["o"]) {
+        gameState.stats.playerBulletSpeedMultiplier*=1.1;
+      }
+      if (CONFIG.DEBUG && keys["p"]) {
+        gameState.stats.bulletCount++;
+      }
+      if (CONFIG.DEBUG && keys["j"]) {
+        gameState.stats.playerShootDelayMultiplier*=0.9;
+      }
+      if (CONFIG.DEBUG && keys["k"]) {
+        gameState.stats.playerBulletSpeedMultiplier*=0.9;
+      }
+      if (CONFIG.DEBUG && keys["l"]) {
+        gameState.stats.bulletCount--;
+      }
+      if (CONFIG.DEBUG && keys["n"]) {
+        gameState.stats.playerSpeedMultiplier*=1.1;
+      }
+      if (CONFIG.DEBUG && keys["m"]) {
+        gameState.stats.playerSpeedMultiplier*=0.9;
+      }
+      if (CONFIG.DEBUG && keys["u"]) {
+        gameState.stats.playerBulletSpreadMultiplier*=0.9;
+      }
+      if (CONFIG.DEBUG && keys["h"]) {
+        gameState.stats.playerBulletSpreadMultiplier*=1.1;
+      }
       const length = Math.hypot(moveX, moveY);
       if (length > 0) {
         moveX = (moveX / length) * BASE_MOVE_SPEED * gameState.stats.playerSpeedMultiplier;
@@ -273,12 +328,12 @@ export default function App() {
       }
 
       if (playerShootCooldown > 0) playerShootCooldown--;
-      if (keys[" "] && playerShootCooldown <= 0){
-        const spread = 0.15;
+      if ((keys[" "] || mouseDown) && playerShootCooldown <= 0){
         for (let i = 0; i < gameState.stats.bulletCount; i++) {
           let angleOffset = 0;
           if (gameState.stats.bulletCount > 1) {
-            angleOffset = (i - (gameState.stats.bulletCount - 1) / 2) * spread;}
+            angleOffset = ((i - (gameState.stats.bulletCount - 1) / 2 )* spread * gameState.stats.playerBulletSpreadMultiplier )
+          }
           bullets.push({
             x: PLAYER.x,
             y: PLAYER.y,
@@ -287,7 +342,7 @@ export default function App() {
             distance: 0,
           });
         }
-        playerShootCooldown = gameState.stats.playerShootDelay;
+        playerShootCooldown = CONFIG.PLAYER_SHOOT_DELAY * gameState.stats.playerShootDelayMultiplier;
       }
       const nextX = PLAYER.x + moveX;
       const nextY = PLAYER.y + moveY;
@@ -395,12 +450,21 @@ export default function App() {
         }
       }
       const aliveEnemies = enemies.filter(e => e.alive);
-      if (aliveEnemies.length === 0) {//konie rundy
+      if (aliveEnemies.length === 0) {//koniec rundy
         enemies.length = 0;
         gameState.world.wave+=1;
-        upgradeMenuOpen = true;//choose a new upgrade
-        currentUpgrades = getRandomUpgrades(3);
-        selectedUpgrade = 0;
+        for(let b = enemyBullets.length - 1; b >= 0; b--) {
+          enemyBullets.splice(b,1)
+        }
+        if(gameState.world.wave%5==0){
+          upgradeMenuOpen = true;//choose a curse
+          currentUpgrades = getRandomCurse(3);
+          selectedUpgrade = 0;
+        }else{
+          upgradeMenuOpen = true;//choose an upgrade
+          currentUpgrades = getRandomUpgrades(3);
+          selectedUpgrade = 0;
+        }
       }
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
@@ -418,7 +482,7 @@ export default function App() {
       ctx.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
       render3D({ctx, player: PLAYER, enemies, bullets, enemyBullets, particles, castRay, screen:{width:SCREEN_WIDTH,height:SCREEN_HEIGHT}});
       drawMinimap({ctx, player: PLAYER, map: MAP, enemies, bullets, enemyBullets});
-      drawUI({ctx, state: {money: gameState.stats.money, lives:gameState.stats.lives, moneyMultiplier:gameState.stats.moneyMultiplier, playerShootDelay: gameState.stats.playerShootDelay, bulletCount: gameState.stats.bulletCount, enemyModifier:gameState.stats.enemyModifier, wave: gameState.world.wave, playerSpeedMultiplier: gameState.stats.playerSpeedMultiplier, playerBulletSpeedMultiplier: gameState.stats.playerBulletSpeedMultiplier}, screen: {width: SCREEN_WIDTH, height: SCREEN_HEIGHT}})
+      drawUI({ctx, state: {money: gameState.stats.money, lives:gameState.stats.lives, moneyMultiplier:gameState.stats.moneyMultiplier, playerShootDelayMultiplier: gameState.stats.playerShootDelayMultiplier, bulletCount: gameState.stats.bulletCount, enemyModifier:gameState.stats.enemyModifier, wave: gameState.world.wave, playerSpeedMultiplier: gameState.stats.playerSpeedMultiplier, playerBulletSpeedMultiplier: gameState.stats.playerBulletSpeedMultiplier, playerBulletSpreadMultiplier: gameState.stats.playerBulletSpreadMultiplier}, screen: {width: SCREEN_WIDTH, height: SCREEN_HEIGHT}})
       drawUpgradeMenu({ctx, ui: {upgradeMenuOpen: upgradeMenuOpen, currentUpgrades: currentUpgrades, selectedUpgrade: selectedUpgrade}, screen: {width: SCREEN_WIDTH, height: SCREEN_HEIGHT}});
       drawPauseMenu({ctx, ui: {pauseMenuOpen:pauseMenuOpen}, screen: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT }});
       requestAnimationFrame(gameLoop);
@@ -428,6 +492,7 @@ export default function App() {
     return () => {
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
+      window.removeEventListener("mousemove", mouseMove);
     };
   }, []);
 

@@ -113,9 +113,10 @@ export function drawUpgradeMenu({
         const upg = ui.currentUpgrades[i];
         const x = startX + i * (boxWidth + gap);
         const y = screen.height / 2 - boxHeight / 2;
-        let color = "#555";
+        let color = "#555";//common
         if (upg.rarity === "rare") color = "#2a52ff";
         if (upg.rarity === "epic") color = "#a020f0";
+        if (upg.rarity === "legendary") color = "#ffdd03";
         if (upg.rarity === "curse") color = "#c30000";
         ctx.fillStyle = color;
         ctx.fillRect(x, y, boxWidth, boxHeight);
@@ -140,7 +141,7 @@ export function drawUI({
     screen,
 }:{
     ctx: CanvasRenderingContext2D;
-    state: {money: number, lives:boolean[], moneyMultiplier:number, playerShootDelay: number, bulletCount: number, enemyModifier:number, wave: number, playerSpeedMultiplier:number,playerBulletSpeedMultiplier:number};
+    state: {money: number, lives:boolean[], moneyMultiplier:number, playerShootDelayMultiplier: number, bulletCount: number, enemyModifier:number, wave: number, playerSpeedMultiplier:number,playerBulletSpeedMultiplier:number,playerBulletSpreadMultiplier:number};
     screen: { width: number; height: number };
 }){
     //hud
@@ -152,31 +153,32 @@ export function drawUI({
     ctx.fillText(`Money: ${state.money}`, hudX, hudY);
     // HEARTS
     const aliveLives = state.lives.filter(l => l).length;
-    const maxWidth = screen.width-MINIMAP_SIZE;
+    const maxWidth = screen.width-MINIMAP_SIZE-24;
     const spacing = 4;
-    let heartSize = 20;
-    const requiredWidth = aliveLives * (heartSize + spacing);
+    let heartWidth = 20;
+    const requiredWidth = aliveLives * (heartWidth + spacing);
     if (requiredWidth > maxWidth) {
-        heartSize = (maxWidth / aliveLives) - spacing;
+        heartWidth = (maxWidth / aliveLives) - spacing;
     }
-    heartSize = Math.max(6, heartSize);
     const startX = screen.width - 20;
     const startY = hudY+10;
     for (let i = 0; i < state.lives.length; i++) {
         ctx.fillStyle = state.lives[i] ? "red" : "#555";
-        const x = startX - (i + 1) * (heartSize + spacing);
-        ctx.fillRect(x, startY, heartSize, heartSize);
+        const x = startX - (i + 1) * (heartWidth + spacing);
+        ctx.fillRect(x, startY, heartWidth, hudY-10);
     }
+
     ctx.fillStyle = "white";
     ctx.font = "22px Arial";
     hudY+=30;
     ctx.fillText(`Wave: ${state.wave}`, hudX, hudY + 30);
     ctx.fillText(`Money Multiplier: x${state.moneyMultiplier}`, hudX, hudY + 60);
-    ctx.fillText(`Cooldown: ${state.playerShootDelay}`, hudX, hudY + 90);
+    ctx.fillText(`Fire Rate: ${state.playerShootDelayMultiplier.toFixed(3)}`, hudX, hudY + 90);
     ctx.fillText(`Bullets: ${state.bulletCount}`, hudX, hudY + 120);
-    ctx.fillText(`Enemies Per Round: ${state.wave+state.enemyModifier}`, hudX, hudY + 150);
-    ctx.fillText(`Movement Speed: ${state.playerSpeedMultiplier}`, hudX, hudY + 180);//nie faktyczna szybkosc ale lepiej wyglada to dla gracza
-    ctx.fillText(`Bullet Speed: ${state.playerBulletSpeedMultiplier}`, hudX, hudY + 210);
+    ctx.fillText(`Enemies Per Round: ${state.wave+state.enemyModifier <= 0 ? 1 : state.wave+state.enemyModifier}`, hudX, hudY + 150);
+    ctx.fillText(`Movement Speed: ${state.playerSpeedMultiplier.toFixed(3)}`, hudX, hudY + 180);//nie faktyczna szybkosc ale lepiej wyglada to dla gracza
+    ctx.fillText(`Bullet Speed: ${state.playerBulletSpeedMultiplier.toFixed(3)}`, hudX, hudY + 210);
+    ctx.fillText(`Bullet Spread: ${state.playerBulletSpreadMultiplier.toFixed(3)}`, hudX, hudY + 240);
     const size = 10; //celownik
     const centerX = screen.width / 2;
     const centerY = screen.height / 2;
