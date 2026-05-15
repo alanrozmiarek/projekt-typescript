@@ -60,7 +60,7 @@ export function render3D({
         }
     }
 
-    for (const enemy of enemies) {//rysowaine przeciwników
+    for (const enemy of enemies) {//rysowanie przeciwników
         if (!enemy.alive) continue;
         const dx = enemy.x - player.x;
         const dy = enemy.y - player.y;
