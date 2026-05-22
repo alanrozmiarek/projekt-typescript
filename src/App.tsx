@@ -6,8 +6,9 @@ import {getRandomUpgrades} from "./game/upgrades.ts";
 import {gameState} from "./game/gameState.ts";
 import {createMap} from "./game/map.ts";
 import {render3D} from "./game/render.tsx";
-import {drawMinimap, drawPauseMenu, drawUpgradeMenu, drawUI} from "./game/ui.ts";
+import {drawMinimap, drawPauseMenu, drawUpgradeMenu, drawUI, drawShopMenu} from "./game/ui.ts";
 import type {Player} from "./game/gameState.ts";
+import {createShop, refreshShopPrices, rerollShop} from "./game/shop";
 
 //highscore: 26
 
@@ -28,6 +29,7 @@ export type Enemy = {
   alive: boolean;
   moveDir: number;
   moveTimer: number;
+  reactionTimer: number;
 };
 const enemies: Enemy[] = [];
 
@@ -50,9 +52,13 @@ export type Particle = {
   lifetime: number;
 };
 let pauseMenuOpen = false;
+let pauseSettingsOpen = false;
 let upgradeMenuOpen = false;
+let shopMenuOpen = false;
 let currentUpgrades: Upgrade[] = [];
 let selectedUpgrade = 0;
+let selectedShopItem = 0;
+let mouseSensitivity = 0.09;
 
 const particles: Particle[] = [];
 let playerShootCooldown = 0;
@@ -63,12 +69,15 @@ const SCREEN_HEIGHT = window.innerHeight;
 //predkosc gracza i kamery i pocisków
 const BASE_MOVE_SPEED = CONFIG.BASE_MOVE_SPEED;
 const ROT_SPEED = CONFIG.ROT_SPEED;
+const MOUSE_FINE_AIM_EXPONENT = CONFIG.MOUSE_FINE_AIM_EXPONENT;
+const MOUSE_FINE_AIM_REFERENCE = CONFIG.MOUSE_FINE_AIM_REFERENCE;
 const BASE_BULLET_SPEED = CONFIG.BASE_BULLET_SPEED;
 
 const spread = CONFIG.BASE_BULLET_SPREAD;
 
 const keys: Record<string, boolean> = {};
 const MAP = createMap();
+const SHOP = createShop(MAP, gameState.ui.shopPurchaseCount);
 
 function getSpawn() {
   while (true) {
@@ -109,6 +118,7 @@ function spawnEnemy(minDistance = CONFIG.ENEMY_MIN_DISTANCE): Enemy {//przeciwni
         alive: true,
         moveDir: 0,
         moveTimer: 10,
+        reactionTimer: CONFIG.ENEMY_REACTION_TIME,
       };
     }
   }
@@ -166,12 +176,12 @@ function spawnParticles(x: number, y: number, color: string, count: number, radi
     });
   }
 }
-function castRay(angle: number) {
+function castRay(x: number, y: number, angle: number) {
   let distance = 0;
 
   while (distance < 20) {
-    const rayX = PLAYER.x + Math.cos(angle) * distance;
-    const rayY = PLAYER.y + Math.sin(angle) * distance;
+    const rayX = x + Math.cos(angle) * distance;
+    const rayY = y + Math.sin(angle) * distance;
 
     if (isWall(rayX, rayY)) {
       return distance;
@@ -185,8 +195,24 @@ function canSeePlayer(enemy: Enemy) {
   const dy = PLAYER.y - enemy.y;
   const angle = Math.atan2(dy, dx);
   const distanceToPlayer = Math.hypot(dx, dy);
-  const distanceToWall = castRay(angle);
+  const distanceToWall = castRay(enemy.x, enemy.y, angle);
   return distanceToPlayer <= distanceToWall;
+}
+function getMouseLookDelta(movementX: number) {
+  const direction = Math.sign(movementX);
+  const amount = Math.abs(movementX);
+  const curvedAmount =
+      Math.pow(amount / MOUSE_FINE_AIM_REFERENCE, MOUSE_FINE_AIM_EXPONENT) *
+      MOUSE_FINE_AIM_REFERENCE;
+
+  return direction * curvedAmount * mouseSensitivity;
+}
+function changeMouseSensitivity(direction: number) {
+  mouseSensitivity = Math.min(
+      0.15,
+      Math.max(0.005, mouseSensitivity + direction * 0.005)
+  );
+  mouseSensitivity = Number(mouseSensitivity.toFixed(3));
 }
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -198,10 +224,9 @@ export default function App() {
     canvas.onclick = () => {
       canvas.requestPointerLock();
     };
-    let yaw = 0;
     const mouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement === canvas) {
-        yaw += e.movementX;
+        PLAYER.angle += getMouseLookDelta(e.movementX);
       }
     };
 
@@ -209,14 +234,76 @@ export default function App() {
     const keyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       keys[key] = true;
+      if (pauseMenuOpen) {
+        if (pauseSettingsOpen) {
+          if (key === "arrowleft" || key === "a") {
+            changeMouseSensitivity(-1);
+          }
+          if (key === "arrowright" || key === "d") {
+            changeMouseSensitivity(1);
+          }
+          if (key === "enter") {
+            pauseSettingsOpen = false;
+          }
+          if (key === "escape") {
+            pauseSettingsOpen = false;
+          }
+          return;
+        }
+
+        if (key === "enter") {
+          pauseSettingsOpen = true;
+          return;
+        }
+      }
+      if (key === "e") {
+        const dx = PLAYER.x - SHOP.x;
+        const dy = PLAYER.y - SHOP.y;
+        if (Math.hypot(dx, dy) < 1.5) {
+          shopMenuOpen = !shopMenuOpen;
+        }
+      }
+      if (shopMenuOpen) {
+        if (key === "arrowleft" || key === "a") {
+          selectedShopItem--;
+          if (selectedShopItem < 0) {
+            selectedShopItem = SHOP.upgrades.length - 1;
+          }
+        }
+        if (key === "arrowright" || key === "d") {
+          selectedShopItem++;
+          if (selectedShopItem >= SHOP.upgrades.length) {
+            selectedShopItem = 0;
+          }
+        }
+        if (key === "enter") {
+          const item = SHOP.upgrades[selectedShopItem];
+          if (gameState.stats.money >= item.price) {
+            gameState.stats.money -= item.price;
+            item.apply(gameState);
+            gameState.ui.shopPurchaseCount++;
+            refreshShopPrices(SHOP, gameState.ui.shopPurchaseCount)
+            SHOP.upgrades.splice(selectedShopItem, 1);
+            if (selectedShopItem >= SHOP.upgrades.length) {
+              selectedShopItem = 0;
+            }
+          }
+        }
+        if (key === "r") {
+          if (gameState.stats.money >= 50) {
+            gameState.stats.money -= 50;
+            rerollShop(SHOP, gameState.ui.shopPurchaseCount);
+          }
+        }
+      }
       if (upgradeMenuOpen){
-        if (key === "arrowleft") {
+        if (key === "arrowleft" || key === "a") {
           selectedUpgrade--;
           if (selectedUpgrade < 0) {
             selectedUpgrade = currentUpgrades.length - 1;
           }
         }
-        if (key === "arrowright") {
+        if (key === "arrowright" || key === "d") {
           selectedUpgrade++;
           if (selectedUpgrade >= currentUpgrades.length) {
             selectedUpgrade = 0;
@@ -235,6 +322,7 @@ export default function App() {
       }
       if (key === "escape") {
         pauseMenuOpen = !pauseMenuOpen;
+        pauseSettingsOpen = false;
         return;
       }
 
@@ -253,6 +341,7 @@ export default function App() {
     function update() {
       if (pauseMenuOpen) return;
       if (upgradeMenuOpen) return;
+      if (shopMenuOpen) return;
 
       if (keys["arrowleft"]) {//movement
         PLAYER.angle -= ROT_SPEED;
@@ -261,8 +350,6 @@ export default function App() {
         PLAYER.angle += ROT_SPEED;
       }
 
-      PLAYER.angle += yaw * 0.01;
-      yaw *= 0.6;
       let moveX = 0;
       let moveY = 0;
 
@@ -356,8 +443,17 @@ export default function App() {
       for (const enemy of enemies) {
         if (!enemy.alive) continue;
         //strzał w gracza
-        enemy.cooldown--;
-        if (enemy.cooldown <= 0 && canSeePlayer(enemy)) {
+        if (canSeePlayer(enemy)) {
+          if (enemy.reactionTimer > 0) {
+            enemy.reactionTimer--;
+          } else {
+            enemy.cooldown--;
+          }
+        } else {
+          enemy.reactionTimer = CONFIG.ENEMY_REACTION_TIME;
+        }
+
+        if (enemy.cooldown <= 0 && enemy.reactionTimer <= 0) {
           const angle = Math.atan2(PLAYER.y - enemy.y, PLAYER.x - enemy.x);
           enemyBullets.push({
             x: enemy.x,
@@ -480,11 +576,20 @@ export default function App() {
     function gameLoop() {
       update();
       ctx.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-      render3D({ctx, player: PLAYER, enemies, bullets, enemyBullets, particles, castRay, screen:{width:SCREEN_WIDTH,height:SCREEN_HEIGHT}});
-      drawMinimap({ctx, player: PLAYER, map: MAP, enemies, bullets, enemyBullets});
-      drawUI({ctx, state: {money: gameState.stats.money, lives:gameState.stats.lives, moneyMultiplier:gameState.stats.moneyMultiplier, playerShootDelayMultiplier: gameState.stats.playerShootDelayMultiplier, bulletCount: gameState.stats.bulletCount, enemyModifier:gameState.stats.enemyModifier, wave: gameState.world.wave, playerSpeedMultiplier: gameState.stats.playerSpeedMultiplier, playerBulletSpeedMultiplier: gameState.stats.playerBulletSpeedMultiplier, playerBulletSpreadMultiplier: gameState.stats.playerBulletSpreadMultiplier}, screen: {width: SCREEN_WIDTH, height: SCREEN_HEIGHT}})
+      render3D({ctx, player: PLAYER, enemies, bullets, enemyBullets, particles, castRay, shop:SHOP, screen:{width:SCREEN_WIDTH,height:SCREEN_HEIGHT}});
+      drawMinimap({ctx, player: PLAYER, map: MAP, enemies, bullets, enemyBullets, shop:SHOP});
+      drawUI({ctx, state: {money: gameState.stats.money, lives:gameState.stats.lives, moneyMultiplier:gameState.stats.moneyMultiplier, playerShootDelayMultiplier: gameState.stats.playerShootDelayMultiplier, bulletCount: gameState.stats.bulletCount, enemyModifier:gameState.stats.enemyModifier, wave: gameState.world.wave, aliveEnemies: enemies.filter(e => e.alive).length, playerSpeedMultiplier: gameState.stats.playerSpeedMultiplier, playerBulletSpeedMultiplier: gameState.stats.playerBulletSpeedMultiplier, playerBulletSpreadMultiplier: gameState.stats.playerBulletSpreadMultiplier}, screen: {width: SCREEN_WIDTH, height: SCREEN_HEIGHT}})
+      drawShopMenu({ctx, ui: {shopMenuOpen, upgrades: SHOP.upgrades, selected: selectedShopItem, money: gameState.stats.money,}, screen: {width: SCREEN_WIDTH, height: SCREEN_HEIGHT,}});
       drawUpgradeMenu({ctx, ui: {upgradeMenuOpen: upgradeMenuOpen, currentUpgrades: currentUpgrades, selectedUpgrade: selectedUpgrade}, screen: {width: SCREEN_WIDTH, height: SCREEN_HEIGHT}});
-      drawPauseMenu({ctx, ui: {pauseMenuOpen:pauseMenuOpen}, screen: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT }});
+      drawPauseMenu({
+        ctx,
+        ui: {
+          pauseMenuOpen,
+          settingsOpen: pauseSettingsOpen,
+          mouseSensitivity,
+        },
+        screen: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT }
+      });
       requestAnimationFrame(gameLoop);
     }
     gameLoop();

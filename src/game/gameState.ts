@@ -25,6 +25,7 @@ export type GameState = {
         upgradeMenuOpen: boolean;
         selectedUpgrade: number;
         currentUpgrades: Upgrade[];
+        shopPurchaseCount: number;
     };
 
     stats: {
@@ -67,6 +68,7 @@ export const gameState: GameState = {
         upgradeMenuOpen: false,
         selectedUpgrade: 0,
         currentUpgrades: [],
+        shopPurchaseCount: 0,
     },
 
     stats: {

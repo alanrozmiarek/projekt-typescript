@@ -1,6 +1,7 @@
 import {gameState} from "./gameState.ts";
 import type {Bullet,EnemyBullet, Enemy, Particle} from "../App.tsx";
 import type {Player} from "./gameState.ts";
+import type {Shop} from "./shop.ts";
 
 function angleDiff(a: number, b: number) {
     let diff = a - b;
@@ -16,6 +17,7 @@ export function render3D({
     enemyBullets,
     particles,
     castRay,
+    shop,
     screen,
 }: {
     ctx: CanvasRenderingContext2D;
@@ -24,7 +26,8 @@ export function render3D({
     bullets: Bullet[];
     enemyBullets: EnemyBullet[];
     particles: Particle[];
-    castRay: (angle: number) => number;
+    castRay: (x: number, y: number, angle: number) => number;
+    shop: Shop;
     screen: {width:number, height:number};
 }) {
     //niebo
@@ -36,7 +39,7 @@ export function render3D({
     const RAY_STEP = 2;
     for (let x = 0; x < screen.width; x += RAY_STEP){
         const angle = player.angle - gameState.stats.FOV/2 + (x/screen.width) * gameState.stats.FOV;
-        let distance = castRay(angle);
+        let distance = castRay(player.x, player.y, angle);
         distance *= Math.cos(player.angle-angle);
         const wallHeight = (screen.height * 0.8)/distance;
         const shade = 255-distance * 25;
@@ -50,7 +53,7 @@ export function render3D({
         const distanceToBullet = Math.hypot(dx, dy);
         const diff = angleDiff(angleToBullet, player.angle);
         if (Math.abs(diff) < gameState.stats.FOV / 2) {
-            const wallDistance = castRay(angleToBullet);
+            const wallDistance = castRay(player.x, player.y, angleToBullet);
             if (distanceToBullet < wallDistance) {
                 const projHeight = (screen.height / 16) / distanceToBullet;
                 ctx.fillStyle = "#31c5ff";
@@ -59,7 +62,22 @@ export function render3D({
             }
         }
     }
-
+    //sklep
+    {
+        const dx = shop.x - player.x;
+        const dy = shop.y - player.y;
+        const angleToShop = Math.atan2(dy, dx);
+        const distanceToShop = Math.hypot(dx, dy);
+        const diff = angleDiff(angleToShop, player.angle);
+        if (Math.abs(diff) < gameState.stats.FOV / 2) {
+            const wallDistance = castRay(player.x, player.y, angleToShop);
+            if (distanceToShop < wallDistance) {
+                const screenX = (diff + gameState.stats.FOV / 2) / gameState.stats.FOV * screen.width;
+                ctx.fillStyle = "yellow";
+                ctx.fillRect(screenX, (screen.height/2), 128/distanceToShop, (screen.height/2)/distanceToShop);
+            }
+        }
+    }
     for (const enemy of enemies) {//rysowanie przeciwników
         if (!enemy.alive) continue;
         const dx = enemy.x - player.x;
@@ -68,7 +86,7 @@ export function render3D({
         const distanceToEnemy = Math.hypot(dx, dy);
         const diff = angleDiff(angleToEnemy, player.angle);
         if (Math.abs(diff) < gameState.stats.FOV / 2) {
-            const wallDistance = castRay(angleToEnemy);
+            const wallDistance = castRay(player.x, player.y, angleToEnemy);
             if (distanceToEnemy < wallDistance) {
                 const screenX = (diff + gameState.stats.FOV / 2) / gameState.stats.FOV * screen.width;
                 ctx.fillStyle = "red";
@@ -84,7 +102,7 @@ export function render3D({
         const distanceToBullet = Math.hypot(dx, dy);
         const diff = angleDiff(angleToBullet, player.angle);
         if (Math.abs(diff) < gameState.stats.FOV / 2) {
-            const wallDistance = castRay(angleToBullet);
+            const wallDistance = castRay(player.x, player.y, angleToBullet);
             if (distanceToBullet < wallDistance) {
                 const projHeight = (screen.height / 16) / distanceToBullet;
                 const screenX = (diff + gameState.stats.FOV / 2) / gameState.stats.FOV * screen.width;
@@ -102,7 +120,7 @@ export function render3D({
         const distanceToParticle = Math.hypot(dx, dy);
         const diff = angleDiff(angleToParticle, player.angle);
         if (Math.abs(diff) < gameState.stats.FOV / 2) {
-            const wallDistance = castRay(angleToParticle);
+            const wallDistance = castRay(player.x, player.y, angleToParticle);
             if (distanceToParticle < wallDistance) {
                 const screenX = (diff + gameState.stats.FOV / 2) / gameState.stats.FOV * screen.width;
                 const projSize = (p.radius * screen.height) / distanceToParticle; // scale by distance
@@ -122,4 +140,3 @@ export function render3D({
     }
 
 }
-
