@@ -12,6 +12,7 @@ export function drawMinimap({
         enemies,
         bullets,
         enemyBullets,
+        shop
     }: {
         ctx: CanvasRenderingContext2D;
         player: Player;
@@ -19,6 +20,7 @@ export function drawMinimap({
         enemies: Enemy[];
         bullets: Bullet[];
         enemyBullets: EnemyBullet[];
+        shop: {x:number, y:number};
     }) {
     const scaleX = MINIMAP_SIZE / map[0].length;
     const scaleY = MINIMAP_SIZE / map.length;
@@ -63,6 +65,14 @@ export function drawMinimap({
         ctx.arc(e.x * tileSize, e.y * tileSize, 2, 0, Math.PI * 2);
         ctx.fill();
     }
+    //Shop
+    ctx.fillStyle = "yellow";
+    ctx.fillRect(
+        (shop.x - 0.3) * tileSize,
+        (shop.y - 0.3) * tileSize,
+        tileSize * 0.6,
+        tileSize * 0.6
+    );
 }
 export function drawPauseMenu({
       ctx,
@@ -70,17 +80,34 @@ export function drawPauseMenu({
       screen,
     }: {
         ctx: CanvasRenderingContext2D;
-        ui: { pauseMenuOpen: boolean };
+        ui: {
+            pauseMenuOpen: boolean;
+            settingsOpen: boolean;
+            mouseSensitivity: number;
+        };
         screen: { width: number; height: number };
     }){
     if (!ui.pauseMenuOpen) return;
-    ui.pauseMenuOpen = true;
     ctx.fillStyle = "rgba(0,0,0,0.8)";
     ctx.fillRect(0, 0, screen.width, screen.height);
     ctx.textAlign = "center";
     ctx.fillStyle = "white";
     ctx.font = "48px Arial";
-    ctx.fillText("Game Paused", screen.width / 2, screen.height / 2);
+    ctx.fillText(ui.settingsOpen ? "Settings" : "Game Paused", screen.width / 2, screen.height / 2 - 90);
+    ctx.font = "24px Arial";
+
+    if (ui.settingsOpen) {
+        ctx.fillText("Mouse Sensitivity", screen.width / 2, screen.height / 2 - 20);
+        ctx.font = "40px Arial";
+        ctx.fillText(`< ${ui.mouseSensitivity.toFixed(3)} >`, screen.width / 2, screen.height / 2 + 35);
+        ctx.font = "20px Arial";
+        ctx.fillText("Left / Right - Adjust", screen.width / 2, screen.height / 2 + 85);
+        ctx.fillText("ENTER / ESC - Back", screen.width / 2, screen.height / 2 + 120);
+        return;
+    }
+
+    ctx.fillText("ENTER - Settings", screen.width / 2, screen.height / 2 - 20);
+    ctx.fillText("ESC - Resume", screen.width / 2, screen.height / 2 + 20);
 }
 export function drawUpgradeMenu({
         ctx,
@@ -141,7 +168,7 @@ export function drawUI({
     screen,
 }:{
     ctx: CanvasRenderingContext2D;
-    state: {money: number, lives:boolean[], moneyMultiplier:number, playerShootDelayMultiplier: number, bulletCount: number, enemyModifier:number, wave: number, playerSpeedMultiplier:number,playerBulletSpeedMultiplier:number,playerBulletSpreadMultiplier:number};
+    state: {money: number, lives:boolean[], moneyMultiplier:number, playerShootDelayMultiplier: number, bulletCount: number, enemyModifier:number, wave: number, aliveEnemies: number, playerSpeedMultiplier:number,playerBulletSpeedMultiplier:number,playerBulletSpreadMultiplier:number};
     screen: { width: number; height: number };
 }){
     //hud
@@ -172,13 +199,14 @@ export function drawUI({
     ctx.font = "22px Arial";
     hudY+=30;
     ctx.fillText(`Wave: ${state.wave}`, hudX, hudY + 30);
-    ctx.fillText(`Money Multiplier: x${state.moneyMultiplier}`, hudX, hudY + 60);
-    ctx.fillText(`Fire Rate: ${state.playerShootDelayMultiplier.toFixed(3)}`, hudX, hudY + 90);
-    ctx.fillText(`Bullets: ${state.bulletCount}`, hudX, hudY + 120);
-    ctx.fillText(`Enemies Per Round: ${state.wave+state.enemyModifier <= 0 ? 1 : state.wave+state.enemyModifier}`, hudX, hudY + 150);
-    ctx.fillText(`Movement Speed: ${state.playerSpeedMultiplier.toFixed(3)}`, hudX, hudY + 180);//nie faktyczna szybkosc ale lepiej wyglada to dla gracza
-    ctx.fillText(`Bullet Speed: ${state.playerBulletSpeedMultiplier.toFixed(3)}`, hudX, hudY + 210);
-    ctx.fillText(`Bullet Spread: ${state.playerBulletSpreadMultiplier.toFixed(3)}`, hudX, hudY + 240);
+    ctx.fillText(`Alive Enemies: ${state.aliveEnemies}`, hudX, hudY + 60);
+    ctx.fillText(`Enemies Per Round: ${state.wave+state.enemyModifier <= 0 ? 1 : state.wave+state.enemyModifier}`, hudX, hudY + 90);
+    ctx.fillText(`Money Multiplier: x${state.moneyMultiplier}`, hudX, hudY + 120);
+    ctx.fillText(`Fire Rate: ${state.playerShootDelayMultiplier.toFixed(3)}`, hudX, hudY + 150);
+    ctx.fillText(`Bullets: ${state.bulletCount}`, hudX, hudY + 180);
+    ctx.fillText(`Movement Speed: ${state.playerSpeedMultiplier.toFixed(3)}`, hudX, hudY + 210);//nie faktyczna szybkosc ale lepiej wyglada to dla gracza
+    ctx.fillText(`Bullet Speed: ${state.playerBulletSpeedMultiplier.toFixed(3)}`, hudX, hudY + 240);
+    ctx.fillText(`Bullet Spread: ${state.playerBulletSpreadMultiplier.toFixed(3)}`, hudX, hudY + 270);
     const size = 10; //celownik
     const centerX = screen.width / 2;
     const centerY = screen.height / 2;
@@ -192,4 +220,59 @@ export function drawUI({
     ctx.moveTo(centerX, centerY - size);
     ctx.lineTo(centerX, centerY + size);
     ctx.stroke();
+}
+export function drawShopMenu({ctx, ui, screen,}: {
+    ctx: CanvasRenderingContext2D;
+    ui: {
+        shopMenuOpen: boolean;
+        upgrades: {
+            name: string;
+            description: string;
+            rarity: string;
+            price: number;
+        }[];
+        selected: number;
+        money: number;
+    };
+    screen: { width: number; height: number };
+}) {
+    if (!ui.shopMenuOpen) return;
+    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    ctx.fillRect(0, 0, screen.width, screen.height);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "yellow";
+    ctx.font = "48px Arial";
+    ctx.fillText("SHOP", screen.width / 2, 100);
+    ctx.fillStyle = "white";
+    ctx.font = "24px Arial";
+    ctx.fillText(`Money: ${ui.money}`, screen.width / 2, 150);
+    ctx.fillText("ENTER - Buy | R - Reroll (50) | E - Exit", screen.width / 2, 190);
+    const boxWidth = 280;
+    const boxHeight = 220;
+    const gap = 40;
+    const totalWidth = ui.upgrades.length * boxWidth + (ui.upgrades.length - 1) * gap;
+    const startX = screen.width / 2 - totalWidth / 2;
+    for (let i = 0; i < ui.upgrades.length; i++) {
+        const item = ui.upgrades[i];
+        const x = startX + i * (boxWidth + gap);
+        const y = screen.height / 2 - boxHeight / 2;
+        let color = "#555";
+        if (item.rarity === "rare") color = "#2a52ff";
+        if (item.rarity === "epic") color = "#a020f0";
+        if (item.rarity === "legendary") color = "#ffdd03";
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, boxWidth, boxHeight);
+        ctx.lineWidth = i === ui.selected ? 6 : 2;
+        ctx.strokeStyle = i === ui.selected ? "#00ff00" : "white";
+        ctx.strokeRect(x, y, boxWidth, boxHeight);
+        ctx.fillStyle = "white";
+        ctx.font = "26px Arial";
+        ctx.fillText(item.name, x + boxWidth / 2, y + 50);
+        ctx.font = "18px Arial";
+        ctx.fillText(item.description, x + boxWidth / 2, y + 95);
+        ctx.font = "20px Arial";
+        ctx.fillText(`$${item.price}`, x + boxWidth / 2, y + 150);
+        ctx.font = "18px Arial";
+        ctx.fillText(item.rarity.toUpperCase(), x + boxWidth / 2, y + 185);
+    }
 }
