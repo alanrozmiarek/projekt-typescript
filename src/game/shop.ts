@@ -1,6 +1,7 @@
 import type { Upgrade } from "./upgrades";
 import { ALL_UPGRADES } from "./upgrades";
 import type { GameState } from "./gameState";
+import { CONFIG } from "../config.ts";
 
 export type ShopUpgrade = Upgrade & {
     price: number;
@@ -14,10 +15,11 @@ export type Shop = {
 };
 export function refreshShopPrices(
     shop: Shop,
-    purchaseCount: number
+    purchaseCount: number,
+    moneyMultiplier: number
 ) {
     for (const item of shop.upgrades) {
-        item.price = randomPrice(item.rarity, purchaseCount);
+        item.price = randomPrice(item.rarity, purchaseCount, moneyMultiplier);
     }
 }
 const SHOP_EXCLUSIVE: ShopUpgrade[] = [
@@ -56,37 +58,58 @@ const SHOP_EXCLUSIVE: ShopUpgrade[] = [
     },
 ];
 
-function randomPrice(rarity: string, purchaseCount: number) {
-    switch (rarity) {
-        case "common":
-            return 30 + (purchaseCount * 5);
+const PRICE_RULES = {
+    common: {
+        baseKills: 8,
+        linearGrowth: 1.5,
+        curveGrowth: 0.35,
+    },
+    rare: {
+        baseKills: 16,
+        linearGrowth: 2.2,
+        curveGrowth: 0.55,
+    },
+    epic: {
+        baseKills: 32,
+        linearGrowth: 3.4,
+        curveGrowth: 0.9,
+    },
+    legendary: {
+        baseKills: 60,
+        linearGrowth: 5,
+        curveGrowth: 1.4,
+    },
+};
 
-        case "rare":
-            return 70 + (purchaseCount * 8);
+function randomPrice(rarity: string, purchaseCount: number, moneyMultiplier: number) {
+    const rule = PRICE_RULES[rarity as keyof typeof PRICE_RULES] ?? PRICE_RULES.rare;
+    const economyScale = Math.max(1, CONFIG.MONEY_PER_KILL);
+    const incomeScale = Math.sqrt(Math.max(1, moneyMultiplier));
+    const curve = Math.pow(purchaseCount, 1.45);
+    const priceInKills =
+        rule.baseKills +
+        purchaseCount * rule.linearGrowth +
+        curve * rule.curveGrowth;
 
-        case "epic":
-            return 140 + (purchaseCount * 12);
-
-        case "legendary":
-            return 250 + (purchaseCount * 20);
-
-        default:
-            return 100 + (purchaseCount * 10);
-    }
+    return Math.max(1, Math.round(priceInKills * economyScale * incomeScale));
 }
 
-function getRandomShopUpgrades(count: number, purchaseCount: number): ShopUpgrade[] {
+function getRandomShopUpgrades(
+    count: number,
+    purchaseCount: number,
+    moneyMultiplier: number
+): ShopUpgrade[] {
 
     const normal = ALL_UPGRADES
         .filter(u => u.rarity !== "curse")
         .map(u => ({
             ...u,
-            price: randomPrice(u.rarity, purchaseCount),
+            price: randomPrice(u.rarity, purchaseCount, moneyMultiplier),
         }));
 
     const exclusives = SHOP_EXCLUSIVE.map(u => ({
         ...u,
-        price: randomPrice(u.rarity, purchaseCount),
+        price: randomPrice(u.rarity, purchaseCount, moneyMultiplier),
     }));
 
     const pool = [...normal, ...exclusives];
@@ -106,7 +129,8 @@ function getRandomShopUpgrades(count: number, purchaseCount: number): ShopUpgrad
 
 export function createShop(
     map: number[][],
-    purchaseCount: number
+    purchaseCount: number,
+    moneyMultiplier: number
 ): Shop {
 
     while (true) {
@@ -117,7 +141,7 @@ export function createShop(
             return {
                 x: x + 0.5,
                 y: y + 0.5,
-                upgrades: getRandomShopUpgrades(3, purchaseCount),
+                upgrades: getRandomShopUpgrades(3, purchaseCount, moneyMultiplier),
             };
         }
     }
@@ -125,7 +149,8 @@ export function createShop(
 
 export function rerollShop(
     shop: Shop,
-    purchaseCount: number
+    purchaseCount: number,
+    moneyMultiplier: number
 ) {
-    shop.upgrades = getRandomShopUpgrades(3, purchaseCount);
+    shop.upgrades = getRandomShopUpgrades(3, purchaseCount, moneyMultiplier);
 }

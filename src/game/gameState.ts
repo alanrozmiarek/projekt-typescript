@@ -1,5 +1,6 @@
 import { CONFIG } from "../config";
-import type {Enemy, EnemyBullet, Bullet, Particle} from "../App.tsx";
+import type {Bullet, Particle} from "../App.tsx";
+import type {Enemy, EnemyBullet} from "./enemies.ts";
 import type {Upgrade} from "./upgrades.ts";
 
 export type Player = {

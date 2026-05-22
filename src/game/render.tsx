@@ -1,7 +1,8 @@
 import {gameState} from "./gameState.ts";
-import type {Bullet,EnemyBullet, Enemy, Particle} from "../App.tsx";
+import type {Bullet, Particle} from "../App.tsx";
 import type {Player} from "./gameState.ts";
 import type {Shop} from "./shop.ts";
+import type {Enemy, EnemyBullet} from "./enemies.ts";
 
 function angleDiff(a: number, b: number) {
     let diff = a - b;
