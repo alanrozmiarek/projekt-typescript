@@ -1,9 +1,26 @@
 import type {Player} from "./gameState.ts";
 import {CONFIG} from "../config.ts";
-import type {Bullet, Enemy, EnemyBullet} from "../App.tsx";
+import type {Bullet} from "../App.tsx";
+import type {Enemy, EnemyBullet} from "./enemies.ts";
 import type {Upgrade} from "./upgrades.ts";
 //nie bierze z gamestate tylko ma rzeczy przekazywane w App
 const MINIMAP_SIZE = CONFIG.MINIMAP_SIZE;
+
+function drawOutlinedText(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    x: number,
+    y: number,
+    fillStyle = "white"
+) {
+    ctx.lineJoin = "round";
+    ctx.miterLimit = 2;
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "black";
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = fillStyle;
+    ctx.fillText(text, x, y);
+}
 
 export function drawMinimap({
         ctx,
@@ -83,7 +100,9 @@ export function drawPauseMenu({
         ui: {
             pauseMenuOpen: boolean;
             settingsOpen: boolean;
+            selectedSetting: number;
             mouseSensitivity: number;
+            maxParticles: number;
         };
         screen: { width: number; height: number };
     }){
@@ -97,12 +116,19 @@ export function drawPauseMenu({
     ctx.font = "24px Arial";
 
     if (ui.settingsOpen) {
-        ctx.fillText("Mouse Sensitivity", screen.width / 2, screen.height / 2 - 20);
-        ctx.font = "40px Arial";
-        ctx.fillText(`< ${ui.mouseSensitivity.toFixed(3)} >`, screen.width / 2, screen.height / 2 + 35);
+        const mousePrefix = ui.selectedSetting === 0 ? "> " : "  ";
+        const particlePrefix = ui.selectedSetting === 1 ? "> " : "  ";
+        ctx.textAlign = "left";
+        const settingsX = screen.width / 2 - 190;
+        ctx.fillText(`${mousePrefix}Mouse Sensitivity`, settingsX, screen.height / 2 - 35);
+        ctx.fillText(`${particlePrefix}Max Particles`, settingsX, screen.height / 2 + 25);
+        ctx.textAlign = "right";
+        ctx.fillText(`< ${ui.mouseSensitivity.toFixed(3)} >`, screen.width / 2 + 190, screen.height / 2 - 35);
+        ctx.fillText(`< ${ui.maxParticles} >`, screen.width / 2 + 190, screen.height / 2 + 25);
+        ctx.textAlign = "center";
         ctx.font = "20px Arial";
-        ctx.fillText("Left / Right - Adjust", screen.width / 2, screen.height / 2 + 85);
-        ctx.fillText("ENTER / ESC - Back", screen.width / 2, screen.height / 2 + 120);
+        ctx.fillText("Up / Down - Select | Left / Right - Adjust", screen.width / 2, screen.height / 2 + 95);
+        ctx.fillText("ENTER / ESC - Back", screen.width / 2, screen.height / 2 + 130);
         return;
     }
 
@@ -177,7 +203,7 @@ export function drawUI({
     let hudY = 30;
     ctx.fillStyle = "white";
     ctx.font = "22px Arial";
-    ctx.fillText(`Money: ${state.money}`, hudX, hudY);
+    drawOutlinedText(ctx, `Money: ${state.money}`, hudX, hudY);
     // HEARTS
     const aliveLives = state.lives.filter(l => l).length;
     const maxWidth = screen.width-MINIMAP_SIZE-24;
@@ -198,15 +224,15 @@ export function drawUI({
     ctx.fillStyle = "white";
     ctx.font = "22px Arial";
     hudY+=30;
-    ctx.fillText(`Wave: ${state.wave}`, hudX, hudY + 30);
-    ctx.fillText(`Alive Enemies: ${state.aliveEnemies}`, hudX, hudY + 60);
-    ctx.fillText(`Enemies Per Round: ${state.wave+state.enemyModifier <= 0 ? 1 : state.wave+state.enemyModifier}`, hudX, hudY + 90);
-    ctx.fillText(`Money Multiplier: x${state.moneyMultiplier}`, hudX, hudY + 120);
-    ctx.fillText(`Fire Rate: ${state.playerShootDelayMultiplier.toFixed(3)}`, hudX, hudY + 150);
-    ctx.fillText(`Bullets: ${state.bulletCount}`, hudX, hudY + 180);
-    ctx.fillText(`Movement Speed: ${state.playerSpeedMultiplier.toFixed(3)}`, hudX, hudY + 210);//nie faktyczna szybkosc ale lepiej wyglada to dla gracza
-    ctx.fillText(`Bullet Speed: ${state.playerBulletSpeedMultiplier.toFixed(3)}`, hudX, hudY + 240);
-    ctx.fillText(`Bullet Spread: ${state.playerBulletSpreadMultiplier.toFixed(3)}`, hudX, hudY + 270);
+    drawOutlinedText(ctx, `Wave: ${state.wave}`, hudX, hudY + 30);
+    drawOutlinedText(ctx, `Alive Enemies: ${state.aliveEnemies}`, hudX, hudY + 60);
+    drawOutlinedText(ctx, `Enemies Per Round: ${state.wave+state.enemyModifier <= 0 ? 1 : state.wave+state.enemyModifier}`, hudX, hudY + 90);
+    drawOutlinedText(ctx, `Money Multiplier: x${state.moneyMultiplier}`, hudX, hudY + 120);
+    drawOutlinedText(ctx, `Fire Rate: ${state.playerShootDelayMultiplier.toFixed(3)}`, hudX, hudY + 150);
+    drawOutlinedText(ctx, `Bullets: ${state.bulletCount}`, hudX, hudY + 180);
+    drawOutlinedText(ctx, `Movement Speed: ${state.playerSpeedMultiplier.toFixed(3)}`, hudX, hudY + 210);//nie faktyczna szybkosc ale lepiej wyglada to dla gracza
+    drawOutlinedText(ctx, `Bullet Speed: ${state.playerBulletSpeedMultiplier.toFixed(3)}`, hudX, hudY + 240);
+    drawOutlinedText(ctx, `Bullet Spread: ${state.playerBulletSpreadMultiplier.toFixed(3)}`, hudX, hudY + 270);
     const size = 10; //celownik
     const centerX = screen.width / 2;
     const centerY = screen.height / 2;
