@@ -17,5 +17,7 @@ export const CONFIG = {
     ENEMY_REACTION_TIME: Number(import.meta.env.VITE_ENEMY_REACTION_TIME ?? 1),
 
     MONEY_PER_KILL: Number(import.meta.env.VITE_MONEY_PER_KILL ?? 100),
-    DEBUG: import.meta.env.VITE_DEBUG === "true",
+    DEBUG: import.meta.env.VITE_DEBUG ?? "true",
+
+    HQ: import.meta.env.VITE_HQ ?? "false",
 };

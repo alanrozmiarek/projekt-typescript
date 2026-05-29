@@ -3,6 +3,7 @@ import type {Bullet, Particle} from "../App.tsx";
 import type {Player} from "./gameState.ts";
 import type {Shop} from "./shop.ts";
 import type {Enemy, EnemyBullet} from "./enemies.ts";
+import {CONFIG} from "../config.ts";
 
 function angleDiff(a: number, b: number) {
     let diff = a - b;
@@ -37,7 +38,8 @@ export function render3D({
     //podloga
     ctx.fillStyle = "#222222";
     ctx.fillRect(0, screen.height/2, screen.width, screen.height/2);
-    const RAY_STEP = 2;
+    //sciany
+    /*const RAY_STEP = 2;
     for (let x = 0; x < screen.width; x += RAY_STEP){
         const angle = player.angle - gameState.stats.FOV/2 + (x/screen.width) * gameState.stats.FOV;
         let distance = castRay(player.x, player.y, angle);
@@ -46,8 +48,66 @@ export function render3D({
         const shade = 255-distance * 25;
         ctx.fillStyle = `rgb(${shade}, ${shade}, ${shade})`;
         ctx.fillRect(x, screen.height/2-wallHeight/2, RAY_STEP, wallHeight);
+    }*/
+
+    const RAY_STEP = 2;
+    for (let x = 0; x < screen.width; x += RAY_STEP) {
+        const angle = player.angle - gameState.stats.FOV / 2 + (x / screen.width) * gameState.stats.FOV;
+        let wallDistance = castRay(player.x, player.y, angle);
+        wallDistance *= Math.cos(player.angle - angle);
+        let hitEnemy = false;
+        let enemyDistance = Infinity;
+        if(CONFIG.HQ) {
+            for (const enemy of enemies) {
+                if (!enemy.alive) continue;
+                const dx = enemy.x - player.x;
+                const dy = enemy.y - player.y;
+                const distanceToEnemy = Math.hypot(dx, dy);
+                const angleToEnemy = Math.atan2(dy, dx);
+                const diff = angleDiff(angleToEnemy, angle);
+                const enemyAngularSize = 0.1 / distanceToEnemy;
+                if (Math.abs(diff) < enemyAngularSize) {
+                    const correctedDistance = distanceToEnemy * Math.cos(player.angle - angle);
+                    if (correctedDistance < wallDistance &&
+                        correctedDistance < enemyDistance) {
+                        enemyDistance = correctedDistance;
+                        hitEnemy = true;
+                    }
+                }
+            }
+        }else{
+            for (const enemy of enemies) {//rysowanie przeciwników
+                if (!enemy.alive) continue;
+                const dx = enemy.x - player.x;
+                const dy = enemy.y - player.y;
+                const angleToEnemy = Math.atan2(dy, dx);
+                const distanceToEnemy = Math.hypot(dx, dy);
+                const diff = angleDiff(angleToEnemy, player.angle);
+                if (Math.abs(diff) < gameState.stats.FOV / 2) {
+                    const wallDistance = castRay(player.x, player.y, angleToEnemy);
+                    if (distanceToEnemy < wallDistance) {
+                        const screenX = (diff + gameState.stats.FOV / 2) / gameState.stats.FOV * screen.width;
+                        ctx.fillStyle = "red";
+                        ctx.fillRect(screenX, screen.height / 2, 128 / distanceToEnemy, (screen.height / 2) / distanceToEnemy);
+                    }
+                }
+            }
+        }
+        // Draw wall
+        const wallHeight = (screen.height * 0.8) / wallDistance;
+        const wallShade = Math.max(0, 255 - wallDistance * 25);
+        ctx.fillStyle = `rgb(${wallShade}, ${wallShade}, ${wallShade})`;
+        ctx.fillRect(x, screen.height / 2 - wallHeight / 2, RAY_STEP, wallHeight
+        );
+        // Draw enemy over wall
+        if (hitEnemy && CONFIG.HQ) {
+            const enemyHeight = (screen.height * 0.5) / enemyDistance;
+            const enemyShade = Math.max(0, 255 - enemyDistance * 15);
+            ctx.fillStyle = /*"red"*/`rgb(${enemyShade},0,0)`;
+            ctx.fillRect(x, screen.height / 2 - enemyHeight / 5, RAY_STEP, enemyHeight);
+        }
     }
-    for (const b of bullets) {
+    for (const b of bullets) {//player bullets
         const dx = b.x - player.x;
         const dy = b.y - player.y;
         const angleToBullet = Math.atan2(dy, dx);
@@ -79,7 +139,7 @@ export function render3D({
             }
         }
     }
-    for (const enemy of enemies) {//rysowanie przeciwników
+    /*for (const enemy of enemies) {//rysowanie przeciwników
         if (!enemy.alive) continue;
         const dx = enemy.x - player.x;
         const dy = enemy.y - player.y;
@@ -94,8 +154,8 @@ export function render3D({
                 ctx.fillRect(screenX, screen.height/2, 128/distanceToEnemy, (screen.height/2)/distanceToEnemy);
             }
         }
-    }
-    for (let i = enemyBullets.length - 1; i >= 0; i--) {
+    }*/
+    for (let i = enemyBullets.length - 1; i >= 0; i--) {//enemy bullets
         const b = enemyBullets[i];
         const dx = b.x - player.x;
         const dy = b.y - player.y;
